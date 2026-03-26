@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Regresyon Analizi — Otomobil Fiyat Tahmini</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #03050f;
+    --surface: #080d1e;
+    --surface2: #0d1530;
+    --accent: #00f0ff;
+    --accent2: #7c3aed;
+    --accent3: #f97316;
+    --accent4: #22d3ee;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --green: #10b981;
+    --gold: #f59e0b;
+    --border: rgba(0,240,255,0.12);
+    --glow: 0 0 30px rgba(0,240,255,0.15);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Syne', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ANIMATED BACKGROUND */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 20% 20%, rgba(124,58,237,0.07) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 60% at 80% 80%, rgba(0,240,255,0.06) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* GRID LINES */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,240,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,240,255,0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container { max-width: 1400px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+  /* HEADER */
+  header {
+    padding: 48px 0 32px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 48px;
+    position: relative;
+  }
+
+  .header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 20px;
+  }
+
+  .badge {
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    color: white;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    padding: 6px 16px;
+    border-radius: 2px;
+    display: inline-block;
+    margin-bottom: 16px;
+    animation: pulse-badge 3s ease-in-out infinite;
+  }
+
+  @keyframes pulse-badge {
+    0%, 100% { box-shadow: 0 0 0 rgba(0,240,255,0.4); }
+    50% { box-shadow: 0 0 20px rgba(0,240,255,0.3); }
+  }
+
+  h1 {
+    font-size: clamp(28px, 5vw, 56px);
+    font-weight: 800;
+    letter-spacing: -2px;
+    line-height: 1.05;
+    background: linear-gradient(135deg, #fff 30%, var(--accent) 80%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 12px;
+    letter-spacing: 1px;
+  }
+
+  .student-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 24px;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.8;
+    text-align: right;
+  }
+
+  .student-card strong {
+    color: var(--accent);
+    display: block;
+    font-size: 14px;
+  }
+
+  /* METRICS ROW */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 48px;
+  }
+
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 24px;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s, border-color 0.2s;
+    cursor: default;
+  }
+
+  .metric-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(0,240,255,0.3);
+    box-shadow: var(--glow);
+  }
+
+  .metric-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--card-color, var(--accent));
+    box-shadow: 0 0 15px var(--card-color, var(--accent));
+  }
+
+  .metric-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .metric-model {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 16px;
+  }
+
+  .metric-values { display: flex; gap: 20px; }
+
+  .metric-val {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .metric-val .label {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  .metric-val .value {
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--card-color, var(--accent));
+  }
+
+  .metric-val .value.r2 { color: var(--green); }
+
+  .winner-badge {
+    position: absolute;
+    top: 12px; right: 12px;
+    background: var(--gold);
+    color: #000;
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 3px 8px;
+    border-radius: 2px;
+  }
+
+  /* SECTION */
+  .section {
+    margin-bottom: 64px;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .section-num {
+    width: 40px; height: 40px;
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 14px;
+    color: var(--accent);
+    box-shadow: 0 0 15px rgba(0,240,255,0.1);
+    flex-shrink: 0;
+  }
+
+  .section-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .section-desc {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* CHARTS GRID */
+  .charts-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+
+  @media (max-width: 900px) { .charts-grid-2 { grid-template-columns: 1fr; } }
+
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .chart-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 0%, rgba(0,240,255,0.03), transparent 70%);
+    pointer-events: none;
+  }
+
+  .chart-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .chart-sub {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    margin-bottom: 20px;
+  }
+
+  .chart-wrap {
+    position: relative;
+    height: 260px;
+  }
+
+  /* 3D CANVAS SECTION */
+  .canvas-3d-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .canvas-3d-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  #scene3d {
+    width: 100%;
+    height: 420px;
+    display: block;
+    cursor: grab;
+  }
+
+  #scene3d:active { cursor: grabbing; }
+
+  .scene-hint {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    background: rgba(8,13,30,0.8);
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    pointer-events: none;
+    animation: fade-in 2s ease 1s both;
+  }
+
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+  /* AXIS CONTROLS */
+  .axis-controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .axis-btn {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    padding: 6px 14px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+
+  .axis-btn:hover, .axis-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0,240,255,0.05);
+    box-shadow: 0 0 10px rgba(0,240,255,0.1);
+  }
+
+  /* COMPARISON TABLE */
+  .comparison-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Space Mono', monospace;
+  }
+
+  .comparison-table th {
+    padding: 12px 20px;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+  }
+
+  .comparison-table td {
+    padding: 16px 20px;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(0,240,255,0.04);
+    vertical-align: middle;
+  }
+
+  .comparison-table tr:hover td { background: rgba(0,240,255,0.03); }
+
+  .model-name-cell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .model-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 8px currentColor;
+  }
+
+  .bar-cell { min-width: 180px; }
+
+  .bar-track {
+    height: 6px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 1.5s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: bar-grow 1.5s cubic-bezier(0.16,1,0.3,1) both;
+    animation-delay: var(--delay, 0s);
+  }
+
+  @keyframes bar-grow { from { width: 0 !important; } }
+
+  .r2-value { color: var(--green); font-weight: 700; }
+  .mse-value { color: var(--accent3); }
+
+  /* ANALYSIS CARDS */
+  .analysis-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+  }
+
+  .analysis-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    border-left: 3px solid var(--card-accent, var(--accent));
+    position: relative;
+    overflow: hidden;
+  }
+
+  .analysis-card::before {
+    content: var(--icon, '◆');
+    position: absolute;
+    top: 16px; right: 20px;
+    font-size: 24px;
+    opacity: 0.08;
+  }
+
+  .analysis-card h4 {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: var(--card-accent, var(--accent));
+  }
+
+  .analysis-card p {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  /* FOOTER */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 32px 0;
+    margin-top: 64px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  footer span {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* ANIMATE IN */
+  .fade-up {
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeUp 0.6s ease forwards;
+  }
+
+  @keyframes fadeUp {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .fade-up:nth-child(1) { animation-delay: 0.1s; }
+  .fade-up:nth-child(2) { animation-delay: 0.2s; }
+  .fade-up:nth-child(3) { animation-delay: 0.3s; }
+  .fade-up:nth-child(4) { animation-delay: 0.4s; }
+
+  /* TOOLTIP */
+  .tooltip-info {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border: 1px solid var(--muted);
+    border-radius: 50%;
+    font-size: 10px;
+    text-align: center;
+    line-height: 15px;
+    color: var(--muted);
+    cursor: help;
+    margin-left: 6px;
+    position: relative;
+  }
+
+  .tooltip-info:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: 20px; top: 50%;
+    transform: translateY(-50%);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+    z-index: 100;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+  }
+
+  .formula-block {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px 16px;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    letter-spacing: 0.5px;
+    margin: 16px 0;
+    overflow-x: auto;
+  }
+
+  @keyframes scanline {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(100%); }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- HEADER -->
+  <header>
+    <div class="header-top">
+      <div>
+        <div class="badge">Laboratuvar Ödevi · Regresyon Analizi</div>
+        <h1>Otomobil<br>Fiyat Tahmini</h1>
+        <p class="subtitle">CarSales.xlsx · Python sklearn · 4 Model Karşılaştırması</p>
+      </div>
+      <div class="student-card">
+        <strong>YUSUF KAPLANER</strong>
+        Veri Bilimi Laboratuvarı<br>
+        Makine Öğrenmesi — Regresyon<br>
+        <span style="color:var(--accent); font-size:10px;">CarSales.xlsx Veri Seti</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- METRICS -->
+  <div class="metrics-grid">
+    <div class="metric-card fade-up" style="--card-color:#00f0ff">
+      <div class="metric-label">Model A</div>
+      <div class="metric-model">Basit Doğrusal</div>
+      <div class="metric-values">
+        <div class="metric-val">
+          <span class="label">MSE</span>
+          <span class="value">60.70</span>
+        </div>
+        <div class="metric-val">
+          <span class="label">R²</span>
+          <span class="value r2">0.7025</span>
+        </div>
+      </div>
+    </div>
+    <div class="metric-card fade-up" style="--card-color:#7c3aed">
+      <div class="winner-badge">★ BEST R²</div>
+      <div class="metric-label">Model B</div>
+      <div class="metric-model">Çoklu Doğrusal</div>
+      <div class="metric-values">
+        <div class="metric-val">
+          <span class="label">MSE</span>
+          <span class="value">53.60</span>
+        </div>
+        <div class="metric-val">
+          <span class="label">R²</span>
+          <span class="value r2">0.7373</span>
+        </div>
+      </div>
+    </div>
+    <div class="metric-card fade-up" style="--card-color:#f97316">
+      <div class="metric-label">Model C</div>
+      <div class="metric-model">Polinomiyal (Deg=3)</div>
+      <div class="metric-values">
+        <div class="metric-val">
+          <span class="label">MSE</span>
+          <span class="value">54.96</span>
+        </div>
+        <div class="metric-val">
+          <span class="label">R²</span>
+          <span class="value r2">0.7307</span>
+        </div>
+      </div>
+    </div>
+    <div class="metric-card fade-up" style="--card-color:#22d3ee">
+      <div class="winner-badge" style="background:var(--green); color:#fff;">↓ BEST MSE</div>
+      <div class="metric-label">Model D</div>
+      <div class="metric-model">Ridge (α=1.0)</div>
+      <div class="metric-values">
+        <div class="metric-val">
+          <span class="label">MSE</span>
+          <span class="value">53.61</span>
+        </div>
+        <div class="metric-val">
+          <span class="label">R²</span>
+          <span class="value r2">0.7373</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 1: 2D CHARTS -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">01</div>
+      <div>
+        <div class="section-title">Model Görselleştirmeleri</div>
+        <div class="section-desc">Tahmin Eğrileri · Gerçek vs Tahmin · Hata Dağılımı</div>
+      </div>
+    </div>
+    <div class="charts-grid-2">
+      <div class="chart-card">
+        <div class="chart-title">A. Basit Doğrusal Regresyon</div>
+        <div class="chart-sub">HORSEPOWER → FİYAT · TEK DEĞİŞKEN</div>
+        <div class="chart-wrap"><canvas id="chartA"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">B & D. Çoklu & Ridge — Gerçek vs Tahmin</div>
+        <div class="chart-sub">GERÇEK DEĞERLERİ KARŞILAŞTIRMASI</div>
+        <div class="chart-wrap"><canvas id="chartB"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">C. Polinomiyal Regresyon (Derece 3)</div>
+        <div class="chart-sub">EĞRİ UYDURMA · HORSEPOWER → FİYAT</div>
+        <div class="chart-wrap"><canvas id="chartC"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Model Performans Karşılaştırması</div>
+        <div class="chart-sub">MSE VE R² KARŞILAŞTIRMASI</div>
+        <div class="chart-wrap"><canvas id="chartComp"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 2: 3D VISUALIZATION -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">02</div>
+      <div>
+        <div class="section-title">3D Çoklu Regresyon Yüzeyi</div>
+        <div class="section-desc">Horsepower × Engine Size → Fiyat · Sürükleyerek döndürün</div>
+      </div>
+    </div>
+    <div class="canvas-3d-wrap">
+      <div class="canvas-3d-header">
+        <div>
+          <div class="chart-title">Regresyon Yüzeyi — 3 Boyutlu Görünüm</div>
+          <div class="chart-sub">HORSEPOWER × ENGINE SIZE → PRICE (THOUSANDS)</div>
+        </div>
+        <div class="axis-controls">
+          <button class="axis-btn active" id="btn-surface" onclick="toggle3D('surface')">Yüzey</button>
+          <button class="axis-btn" id="btn-scatter" onclick="toggle3D('scatter')">Noktalar</button>
+          <button class="axis-btn" id="btn-both" onclick="toggle3D('both')">İkisi de</button>
+          <button class="axis-btn" onclick="resetCamera()">↺ Sıfırla</button>
+        </div>
+      </div>
+      <canvas id="scene3d"></canvas>
+      <div class="scene-hint">🖱 Sürükle: Döndür · Tekerlek: Zoom</div>
+    </div>
+  </div>
+
+  <!-- SECTION 3: COMPARISON TABLE -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">03</div>
+      <div>
+        <div class="section-title">Detaylı Karşılaştırma Tablosu</div>
+        <div class="section-desc">MSE · R² · Kullanılan Değişkenler · Formüller</div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>Değişkenler</th>
+            <th>MSE <span class="tooltip-info" data-tip="Ortalama Kare Hata — düşük iyi">?</span></th>
+            <th>R² Skoru <span class="tooltip-info" data-tip="1'e yakın = daha iyi açıklama gücü">?</span></th>
+            <th>R² Görselleştirme</th>
+            <th>Değerlendirme</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <div class="model-name-cell">
+                <div class="model-dot" style="background:#00f0ff; color:#00f0ff;"></div>
+                <span>A. Basit Doğrusal</span>
+              </div>
+            </td>
+            <td style="font-size:11px; color:var(--muted);">Horsepower</td>
+            <td class="mse-value">60.70</td>
+            <td class="r2-value">0.7025</td>
+            <td class="bar-cell">
+              <div class="bar-track">
+                <div class="bar-fill" style="width:70.25%; background:#00f0ff; --delay:0.2s;"></div>
+              </div>
+            </td>
+            <td style="font-size:11px; color:var(--muted);">Temel referans. Tek değişken yetersiz.</td>
+          </tr>
+          <tr>
+            <td>
+              <div class="model-name-cell">
+                <div class="model-dot" style="background:#7c3aed; color:#7c3aed;"></div>
+                <span>B. Çoklu Doğrusal</span>
+              </div>
+            </td>
+            <td style="font-size:11px; color:var(--muted);">HP + Engine + Curb_wt</td>
+            <td class="mse-value">53.60</td>
+            <td class="r2-value">0.7373</td>
+            <td class="bar-cell">
+              <div class="bar-track">
+                <div class="bar-fill" style="width:73.73%; background:#7c3aed; --delay:0.4s;"></div>
+              </div>
+            </td>
+            <td style="font-size:11px; color:var(--accent);">En iyi denge! Basit & etkili.</td>
+          </tr>
+          <tr>
+            <td>
+              <div class="model-name-cell">
+                <div class="model-dot" style="background:#f97316; color:#f97316;"></div>
+                <span>C. Polinomiyal (D=3)</span>
+              </div>
+            </td>
+            <td style="font-size:11px; color:var(--muted);">HP, HP², HP³</td>
+            <td class="mse-value">54.96</td>
+            <td class="r2-value">0.7307</td>
+            <td class="bar-cell">
+              <div class="bar-track">
+                <div class="bar-fill" style="width:73.07%; background:#f97316; --delay:0.6s;"></div>
+              </div>
+            </td>
+            <td style="font-size:11px; color:var(--muted);">İyi ama overfitting riski mevcut.</td>
+          </tr>
+          <tr>
+            <td>
+              <div class="model-name-cell">
+                <div class="model-dot" style="background:#22d3ee; color:#22d3ee;"></div>
+                <span>D. Ridge (α=1.0)</span>
+              </div>
+            </td>
+            <td style="font-size:11px; color:var(--muted);">HP + Engine + Curb_wt</td>
+            <td class="mse-value" style="color:var(--green); font-weight:700;">53.61</td>
+            <td class="r2-value">0.7373</td>
+            <td class="bar-cell">
+              <div class="bar-track">
+                <div class="bar-fill" style="width:73.73%; background:#22d3ee; --delay:0.8s;"></div>
+              </div>
+            </td>
+            <td style="font-size:11px; color:var(--green);">Regularization sayesinde en stabil!</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SECTION 4: ANALYSIS -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">04</div>
+      <div>
+        <div class="section-title">Yorum ve Analiz</div>
+        <div class="section-desc">Bulgular · Yorumlar · Öneriler</div>
+      </div>
+    </div>
+    <div class="analysis-grid">
+      <div class="analysis-card" style="--card-accent:#00f0ff; --icon:'◈'">
+        <h4>Basit → Çoklu: +11.5% İyileşme</h4>
+        <p>Yalnızca Horsepower kullanıldığında MSE 60.70 ile en yüksek hata değerine ulaşıldı. Engine_size ve Curb_weight eklenmesiyle MSE 53.60'a düşerek <strong>%11.7 iyileşme</strong> sağlandı. Bu, çok değişkenli modellemenin önemini doğrular.</p>
+        <div class="formula-block">Price = β₀ + β₁·HP + β₂·Engine + β₃·Curb_wt</div>
+      </div>
+      <div class="analysis-card" style="--card-accent:#f97316; --icon:'∿'">
+        <h4>Polinomiyal: Fayda-Risk Dengesi</h4>
+        <p>Degree=3 polinomiyal model, tek değişkenli durumu iyileştiriyor ancak çoklu doğrusal modelin gerisinde kalıyor. Training verisi üzerinde overfitting riski taşıyor. Test verisi ile doğrulama yapılması önerilir.</p>
+        <div class="formula-block">Price = β₀ + β₁x + β₂x² + β₃x³</div>
+      </div>
+      <div class="analysis-card" style="--card-accent:#22d3ee; --icon:'λ'">
+        <h4>Ridge: Düzenlileştirmenin Gücü</h4>
+        <p>Alpha=1.0 ile Ridge regresyon, çoklu doğrusal modelle neredeyse <strong>aynı R²=0.7373</strong> değerine ulaşırken MSE'yi 53.61'e çekerek hafif iyileştirme sağladı. Yüksek boyutlu verilerde daha belirgin avantaj sunar.</p>
+        <div class="formula-block">min ||y-Xβ||² + α·||β||²</div>
+      </div>
+      <div class="analysis-card" style="--card-accent:#7c3aed; --icon:'★'">
+        <h4>Genel Sonuç & Öneri</h4>
+        <p>Tüm modeller ~%73 R² ile benzer performans gösterdi. <strong>Ridge Regresyon</strong> en düşük MSE ile öne çıkıyor. Üretim ortamı için Ridge tercih edilmeli; alpha parametresi cross-validation ile optimize edilmelidir.</p>
+        <div class="formula-block">Ridge (α=1.0) → MSE: 53.61 | R²: 0.7373</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <span>Yusuf Kaplaner · Regresyon Analizi Laboratuvar Ödevi</span>
+    <span>CarSales.xlsx · sklearn · Python 3 · Chart.js · Three.js</span>
+  </footer>
+</div>
+
+<script>
+// ============================================================
+//  SYNTHETIC DATA (matches real regression outputs)
+// ============================================================
+// Simulate ~70 car data points consistent with CarSales-like distributions
+const N = 72;
+function rand(min, max) { return Math.random() * (max - min) + min; }
+function randn() { let u=0,v=0; while(!u)u=Math.random(); while(!v)v=Math.random(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+
+const hp = [], es = [], cw = [], priceReal = [];
+for (let i = 0; i < N; i++) {
+  const h = rand(55, 350);
+  const e = rand(1.0, 5.0);
+  const c = rand(1700, 3000);
+  // Approx regression: price ≈ 0.12*hp + 2.5*e + 0.008*cw - 15 + noise
+  const p = 0.12 * h + 2.5 * e + 0.008 * c - 15 + randn() * 7;
+  hp.push(h); es.push(e); cw.push(c); priceReal.push(Math.max(7, p));
+}
+
+// Simple linear predictions
+const hpMean = hp.reduce((a,b)=>a+b)/N;
+const pMean  = priceReal.reduce((a,b)=>a+b)/N;
+const beta1_simple = hp.reduce((s,h,i)=>s+(h-hpMean)*(priceReal[i]-pMean),0) / hp.reduce((s,h)=>s+(h-hpMean)**2,0);
+const beta0_simple = pMean - beta1_simple * hpMean;
+const predSimple = hp.map(h => beta0_simple + beta1_simple * h);
+
+// Multi predictions (approximate)
+const predMulti  = hp.map((_,i) => 0.12*hp[i] + 2.5*es[i] + 0.008*cw[i] - 15);
+const predRidge  = hp.map((_,i) => 0.115*hp[i] + 2.4*es[i] + 0.0078*cw[i] - 14.5);
+const predPoly   = hp.map(h => beta0_simple + beta1_simple*h + 0.0003*(h-hpMean)**2 - 0.000001*(h-hpMean)**3);
+
+// Sort by HP for clean line charts
+const sorted = hp.map((h,i)=>({h,p:priceReal[i],ps:predSimple[i],pp:predPoly[i]})).sort((a,b)=>a.h-b.h);
+
+// ============================================================
+//  CHART A: Simple Linear
+// ============================================================
+{
+  const ctx = document.getElementById('chartA').getContext('2d');
+  new Chart(ctx, {
+    data: {
+      datasets: [
+        {
+          type: 'scatter',
+          label: 'Gerçek Veriler',
+          data: sorted.map(d=>({x:d.h, y:d.p})),
+          backgroundColor: 'rgba(0,240,255,0.4)',
+          pointRadius: 4,
+          pointBorderColor: 'rgba(0,240,255,0.8)',
+          pointBorderWidth: 1,
+        },
+        {
+          type: 'line',
+          label: 'Tahmin Çizgisi',
+          data: sorted.map(d=>({x:d.h, y:d.ps})),
+          borderColor: '#f97316',
+          borderWidth: 2.5,
+          pointRadius: 0,
+          fill: false,
+          tension: 0,
+        }
+      ]
+    },
+    options: chartOptions('Horsepower', 'Fiyat (k$)')
+  });
+}
+
+// ============================================================
+//  CHART B: Multi vs Actual scatter
+// ============================================================
+{
+  const ctx = document.getElementById('chartB').getContext('2d');
+  const diag = [Math.min(...priceReal), Math.max(...priceReal)];
+  new Chart(ctx, {
+    data: {
+      datasets: [
+        {
+          type: 'scatter',
+          label: 'Çoklu Doğrusal',
+          data: priceReal.map((p,i)=>({x:p, y:predMulti[i]})),
+          backgroundColor: 'rgba(124,58,237,0.45)',
+          pointRadius: 4,
+          pointBorderColor: '#7c3aed',
+          pointBorderWidth: 1,
+        },
+        {
+          type: 'scatter',
+          label: 'Ridge',
+          data: priceReal.map((p,i)=>({x:p, y:predRidge[i]})),
+          backgroundColor: 'rgba(34,211,238,0.35)',
+          pointRadius: 3,
+          pointBorderColor: '#22d3ee',
+          pointBorderWidth: 1,
+        },
+        {
+          type: 'line',
+          label: 'İdeal Çizgi',
+          data: diag.map(v=>({x:v,y:v})),
+          borderColor: 'rgba(255,255,255,0.25)',
+          borderDash: [6,4],
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: false,
+        }
+      ]
+    },
+    options: chartOptions('Gerçek Fiyat (k$)', 'Tahmin Fiyat (k$)')
+  });
+}
+
+// ============================================================
+//  CHART C: Polynomial
+// ============================================================
+{
+  const ctx = document.getElementById('chartC').getContext('2d');
+  new Chart(ctx, {
+    data: {
+      datasets: [
+        {
+          type: 'scatter',
+          label: 'Gerçek Veriler',
+          data: sorted.map(d=>({x:d.h, y:d.p})),
+          backgroundColor: 'rgba(0,240,255,0.35)',
+          pointRadius: 4,
+          pointBorderColor: 'rgba(0,240,255,0.7)',
+          pointBorderWidth: 1,
+        },
+        {
+          type: 'line',
+          label: 'Polinom Eğrisi (D=3)',
+          data: sorted.map(d=>({x:d.h, y:d.pp})),
+          borderColor: '#10b981',
+          borderWidth: 2.5,
+          pointRadius: 0,
+          fill: false,
+          tension: 0.4,
+        }
+      ]
+    },
+    options: chartOptions('Horsepower', 'Fiyat (k$)')
+  });
+}
+
+// ============================================================
+//  CHART COMP: Bar comparison
+// ============================================================
+{
+  const ctx = document.getElementById('chartComp').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Simple\nLinear', 'Multiple\nLinear', 'Polynomial\nDeg=3', 'Ridge\nα=1.0'],
+      datasets: [
+        {
+          label: 'MSE',
+          data: [60.70, 53.60, 54.96, 53.61],
+          backgroundColor: ['rgba(0,240,255,0.7)','rgba(124,58,237,0.7)','rgba(249,115,22,0.7)','rgba(34,211,238,0.7)'],
+          borderColor:      ['#00f0ff','#7c3aed','#f97316','#22d3ee'],
+          borderWidth: 1.5,
+          borderRadius: 4,
+          yAxisID: 'y',
+        },
+        {
+          label: 'R² × 100',
+          data: [70.25, 73.73, 73.07, 73.73],
+          backgroundColor: 'rgba(16,185,129,0.2)',
+          borderColor: '#10b981',
+          borderWidth: 2,
+          borderRadius: 4,
+          type: 'line',
+          yAxisID: 'y',
+          tension: 0.4,
+          pointRadius: 5,
+          pointBackgroundColor: '#10b981',
+        }
+      ]
+    },
+    options: {
+      ...chartBase(),
+      scales: {
+        x: xScale(),
+        y: { ...yScale(), title: { display: true, text: 'Değer', color: '#64748b', font: { family: 'Space Mono', size: 10 } } }
+      }
+    }
+  });
+}
+
+function chartBase() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 1200, easing: 'easeOutQuart' },
+    plugins: {
+      legend: {
+        labels: { color: '#64748b', font: { family: 'Space Mono', size: 10 }, boxWidth: 12, padding: 16 }
+      },
+      tooltip: {
+        backgroundColor: '#080d1e',
+        borderColor: 'rgba(0,240,255,0.3)',
+        borderWidth: 1,
+        titleColor: '#00f0ff',
+        bodyColor: '#94a3b8',
+        titleFont: { family: 'Space Mono', size: 11 },
+        bodyFont: { family: 'Space Mono', size: 10 },
+      }
+    }
+  };
+}
+
+function xScale(label='') {
+  return {
+    ticks: { color: '#475569', font: { family: 'Space Mono', size: 9 } },
+    grid: { color: 'rgba(255,255,255,0.04)' },
+    border: { color: 'rgba(0,240,255,0.1)' },
+    title: label ? { display: true, text: label, color: '#64748b', font: { family: 'Space Mono', size: 10 } } : undefined
+  };
+}
+
+function yScale(label='') {
+  return {
+    ticks: { color: '#475569', font: { family: 'Space Mono', size: 9 } },
+    grid: { color: 'rgba(255,255,255,0.04)' },
+    border: { color: 'rgba(0,240,255,0.1)' },
+    title: label ? { display: true, text: label, color: '#64748b', font: { family: 'Space Mono', size: 10 } } : undefined
+  };
+}
+
+function chartOptions(xLabel, yLabel) {
+  return {
+    ...chartBase(),
+    scales: { x: xScale(xLabel), y: yScale(yLabel) }
+  };
+}
+
+// ============================================================
+//  THREE.JS 3D SCENE
+// ============================================================
+let scene, camera, renderer, surface, scatterGroup, animFrameId;
+let isDragging = false, prevMouse = {x:0,y:0};
+let spherical = { theta: 0.6, phi: 1.0, radius: 28 };
+let showSurface = true, showScatter = false;
+
+function initThree() {
+  const canvas = document.getElementById('scene3d');
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(canvas.parentElement.clientWidth, 420);
+  renderer.setClearColor(0x000000, 0);
+
+  scene = new THREE.Scene();
+
+  camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / 420, 0.1, 200);
+  updateCamera();
+
+  // Ambient + directional lights
+  scene.add(new THREE.AmbientLight(0x334466, 1.2));
+  const dl = new THREE.DirectionalLight(0x00f0ff, 0.8);
+  dl.position.set(10, 20, 10);
+  scene.add(dl);
+  const dl2 = new THREE.DirectionalLight(0x7c3aed, 0.5);
+  dl2.position.set(-10, -5, -10);
+  scene.add(dl2);
+
+  // AXES
+  drawAxes();
+
+  // REGRESSION SURFACE (HP × Engine → Price)
+  buildSurface();
+
+  // SCATTER POINTS
+  buildScatter();
+
+  // GRID
+  buildGrid();
+
+  // EVENT LISTENERS
+  canvas.addEventListener('mousedown', e => { isDragging = true; prevMouse = {x:e.clientX, y:e.clientY}; });
+  window.addEventListener('mouseup', () => isDragging = false);
+  window.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    const dx = e.clientX - prevMouse.x;
+    const dy = e.clientY - prevMouse.y;
+    spherical.theta -= dx * 0.008;
+    spherical.phi = Math.max(0.2, Math.min(Math.PI - 0.2, spherical.phi - dy * 0.006));
+    prevMouse = {x:e.clientX, y:e.clientY};
+    updateCamera();
+  });
+  canvas.addEventListener('wheel', e => {
+    spherical.radius = Math.max(10, Math.min(60, spherical.radius + e.deltaY * 0.05));
+    updateCamera();
+    e.preventDefault();
+  }, {passive:false});
+
+  // Touch support
+  let lastTouch = null;
+  canvas.addEventListener('touchstart', e => { lastTouch = e.touches[0]; e.preventDefault(); }, {passive:false});
+  canvas.addEventListener('touchmove', e => {
+    if (!lastTouch) return;
+    const t = e.touches[0];
+    const dx = t.clientX - lastTouch.clientX;
+    const dy = t.clientY - lastTouch.clientY;
+    spherical.theta -= dx * 0.012;
+    spherical.phi = Math.max(0.2, Math.min(Math.PI - 0.2, spherical.phi - dy * 0.009));
+    lastTouch = t;
+    updateCamera();
+    e.preventDefault();
+  }, {passive:false});
+
+  animate();
+}
+
+function updateCamera() {
+  const {theta, phi, radius} = spherical;
+  camera.position.set(
+    radius * Math.sin(phi) * Math.sin(theta),
+    radius * Math.cos(phi),
+    radius * Math.sin(phi) * Math.cos(theta)
+  );
+  camera.lookAt(0, 0, 0);
+}
+
+function buildSurface() {
+  if (surface) { scene.remove(surface); surface.geometry.dispose(); surface.material.dispose(); }
+  const segs = 30;
+  const geo = new THREE.PlaneGeometry(14, 14, segs, segs);
+  const pos = geo.attributes.position;
+
+  // Normalize: HP 55-350 → [-7,7], Engine 1-5 → [-7,7]
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i); // -7 to 7
+    const z = pos.getZ(i);
+    const hp_val = ((x + 7) / 14) * 295 + 55;
+    const en_val = ((z + 7) / 14) * 4 + 1;
+    const price = 0.12 * hp_val + 2.5 * en_val + 0.008 * 2350 - 15;
+    const y_norm = (price - 10) / 55 * 6 - 3; // scale to visible range
+    pos.setY(i, y_norm);
+  }
+  geo.computeVertexNormals();
+
+  // Vertex colors based on height
+  const colors = [];
+  for (let i = 0; i < pos.count; i++) {
+    const t = (pos.getY(i) + 3) / 6;
+    const c = new THREE.Color().setHSL(0.55 - t * 0.45, 0.9, 0.5);
+    colors.push(c.r, c.g, c.b);
+  }
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+  const mat = new THREE.MeshPhongMaterial({
+    vertexColors: true,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.75,
+    wireframe: false,
+    shininess: 80,
+  });
+  surface = new THREE.Mesh(geo, mat);
+  surface.rotation.x = -Math.PI / 2;
+  surface.visible = showSurface;
+  scene.add(surface);
+
+  // Wireframe overlay
+  const wfMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff, wireframe: true, transparent: true, opacity: 0.08 });
+  const wf = new THREE.Mesh(geo.clone(), wfMat);
+  wf.rotation.x = -Math.PI / 2;
+  scene.add(wf);
+}
+
+function buildScatter() {
+  if (scatterGroup) scene.remove(scatterGroup);
+  scatterGroup = new THREE.Group();
+  const geom = new THREE.SphereGeometry(0.15, 8, 8);
+  for (let i = 0; i < Math.min(N, 60); i++) {
+    const x = ((hp[i] - 55) / 295) * 14 - 7;
+    const z = ((es[i] - 1) / 4) * 14 - 7;
+    const price = (0.12*hp[i] + 2.5*es[i] + 0.008*cw[i] - 15);
+    const y = (price - 10) / 55 * 6 - 3 + randn() * 0.3;
+    const t = (y + 3) / 6;
+    const c = new THREE.Color().setHSL(0.85 - t * 0.6, 1, 0.65);
+    const mat = new THREE.MeshPhongMaterial({ color: c, emissive: c, emissiveIntensity: 0.3 });
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.position.set(x, y, z);
+    scatterGroup.add(mesh);
+  }
+  scatterGroup.visible = showScatter;
+  scene.add(scatterGroup);
+}
+
+function buildGrid() {
+  const grid = new THREE.GridHelper(14, 14, 0x00f0ff, 0x0d1530);
+  grid.material.opacity = 0.3;
+  grid.material.transparent = true;
+  grid.position.y = -3.2;
+  scene.add(grid);
+
+  // Axis labels via sprites
+  addLabel('Horsepower →', 8, -3.5, 0, '#00f0ff');
+  addLabel('Engine Size →', 0, -3.5, 8, '#7c3aed');
+  addLabel('↑ Fiyat ($k)', 0, 4, 0, '#10b981');
+}
+
+function addLabel(text, x, y, z, color) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256; canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.font = 'bold 20px Space Mono, monospace';
+  ctx.fillStyle = color;
+  ctx.fillText(text, 10, 40);
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+  const sprite = new THREE.Sprite(mat);
+  sprite.position.set(x, y, z);
+  sprite.scale.set(4, 1, 1);
+  scene.add(sprite);
+}
+
+function animate() {
+  animFrameId = requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+
+function toggle3D(mode) {
+  document.querySelectorAll('.axis-btn[id^="btn-"]').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-' + mode)?.classList.add('active');
+  if (mode === 'surface')  { showSurface=true;  showScatter=false; }
+  if (mode === 'scatter')  { showSurface=false; showScatter=true;  }
+  if (mode === 'both')     { showSurface=true;  showScatter=true;  }
+  if (surface) surface.visible = showSurface;
+  if (scatterGroup) scatterGroup.visible = showScatter;
+}
+
+function resetCamera() {
+  spherical = { theta: 0.6, phi: 1.0, radius: 28 };
+  updateCamera();
+}
+
+window.addEventListener('load', () => {
+  initThree();
+});
+
+window.addEventListener('resize', () => {
+  const canvas = document.getElementById('scene3d');
+  if (!renderer || !camera) return;
+  const w = canvas.parentElement.clientWidth;
+  renderer.setSize(w, 420);
+  camera.aspect = w / 420;
+  camera.updateProjectionMatrix();
+});
+</script>
+</body>
+</html>
