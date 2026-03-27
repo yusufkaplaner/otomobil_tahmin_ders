@@ -7,8 +7,7 @@ Bu repository, otomobil teknik özellikleri ile satış fiyatları arasındaki i
 ## 📊 Performans Sonuçları (Tabloyu Doldurun)
 
 Analizler sonucunda elde edilen metrikler, modeller arasındaki başarı farkını net bir şekilde göstermektedir.
-
-> **Hocaya Sunum Notu:** "Multiple Linear" ve "Ridge" modellerinin, sadece beygir gücü değil, motor hacmi ve araç ağırlığını da hesaba kattığı için daha başarılı olduğu gözlemlenmiştir.
+"Multiple Linear" ve "Ridge" modellerinin, sadece beygir gücü değil, motor hacmi ve araç ağırlığını da hesaba kattığı için daha başarılı olduğu gözlemlenmiştir.
 
 Model Türü           | MSE        | R-Squared
 ---------------------------------------------
